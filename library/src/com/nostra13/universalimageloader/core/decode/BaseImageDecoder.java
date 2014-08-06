@@ -15,11 +15,15 @@
  *******************************************************************************/
 package com.nostra13.universalimageloader.core.decode;
 
+import android.annotation.TargetApi;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapFactory.Options;
 import android.graphics.Matrix;
-import android.media.ExifInterface;
+import android.os.Build;
+import android.util.Log;
+import com.mobilesolutionworks.grepcode.gallery3d.exif.ExifInterface;
+import com.mobilesolutionworks.grepcode.gallery3d.exif.ExifTag;
 import com.nostra13.universalimageloader.core.assist.ImageScaleType;
 import com.nostra13.universalimageloader.core.assist.ImageSize;
 import com.nostra13.universalimageloader.core.download.ImageDownloader.Scheme;
@@ -99,51 +103,89 @@ public class BaseImageDecoder implements ImageDecoder {
 		options.inJustDecodeBounds = true;
 		BitmapFactory.decodeStream(imageStream, null, options);
 
+        imageStream = resetStream(imageStream, decodingInfo);
+
 		ExifInfo exif;
 		String imageUri = decodingInfo.getImageUri();
-		if (decodingInfo.shouldConsiderExifParams() && canDefineExifParams(imageUri, options.outMimeType)) {
-			exif = defineExifOrientation(imageUri);
+        boolean b = canDefineExifParams(imageUri, options.outMimeType);
+
+        Log.d("com.nostra13.universalimageloader.core.decode", "canDefineExifParams = " + b);
+        Log.d("com.nostra13.universalimageloader.core.decode", "decodingInfo.shouldConsiderExifParams() = " + decodingInfo.shouldConsiderExifParams());
+        if (decodingInfo.shouldConsiderExifParams() && canDefineExifParams(imageUri, options.outMimeType)) {
+			exif = defineExifOrientation(imageUri, imageStream);
 		} else {
-			exif = new ExifInfo();
+            Log.d("com.nostra13.universalimageloader.core.decode", "no exif");
+            exif = new ExifInfo();
 		}
 		return new ImageFileInfo(new ImageSize(options.outWidth, options.outHeight, exif.rotation), exif);
 	}
 
 	private boolean canDefineExifParams(String imageUri, String mimeType) {
-		return "image/jpeg".equalsIgnoreCase(mimeType) && (Scheme.ofUri(imageUri) == Scheme.FILE);
+        Log.d("com.nostra13.universalimageloader.core.decode", "mimeType = " + mimeType);
+        Log.d("com.nostra13.universalimageloader.core.decode", "Scheme.ofUri(imageUri) = " + Scheme.ofUri(imageUri));
+        Log.d("com.nostra13.universalimageloader.core.decode", "imageUri = " + imageUri);
+		return "image/jpeg".equalsIgnoreCase(mimeType) && (Scheme.ofUri(imageUri) == Scheme.FILE || Scheme.ofUri(imageUri) == Scheme.HTTP);
 	}
 
-	protected ExifInfo defineExifOrientation(String imageUri) {
-		int rotation = 0;
-		boolean flip = false;
-		try {
-			ExifInterface exif = new ExifInterface(Scheme.FILE.crop(imageUri));
-			int exifOrientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-			switch (exifOrientation) {
-				case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
-					flip = true;
-				case ExifInterface.ORIENTATION_NORMAL:
-					rotation = 0;
-					break;
-				case ExifInterface.ORIENTATION_TRANSVERSE:
-					flip = true;
-				case ExifInterface.ORIENTATION_ROTATE_90:
-					rotation = 90;
-					break;
-				case ExifInterface.ORIENTATION_FLIP_VERTICAL:
-					flip = true;
-				case ExifInterface.ORIENTATION_ROTATE_180:
-					rotation = 180;
-					break;
-				case ExifInterface.ORIENTATION_TRANSPOSE:
-					flip = true;
-				case ExifInterface.ORIENTATION_ROTATE_270:
-					rotation = 270;
-					break;
-			}
-		} catch (IOException e) {
-			L.w("Can't read EXIF tags from file [%s]", imageUri);
-		}
+	@TargetApi(Build.VERSION_CODES.ECLAIR)
+    protected ExifInfo defineExifOrientation(String imageUri, InputStream imageStream) {
+        int rotation = 0;
+        boolean flip = false;
+        try
+        {
+            ExifInterface exifInterface = new ExifInterface();
+            exifInterface.readExif(imageStream);
+
+//            try
+//            {
+//                for (ExifTag tag : exifInterface.getAllTags())
+//                {
+//                    Log.d("com.nostra13.universalimageloader.core.decode", "tag = " + tag);
+//                }
+//            }
+//            catch (Exception e)
+//            {
+//                Log.d("com.nostra13.universalimageloader.core.decode", "no exif tags?");
+//                // e.printStackTrace();
+//            }
+//
+//			ExifInterface exif = new ExifInterface(Scheme.FILE.crop(imageUri));
+            ExifTag tag = exifInterface.getTag(ExifInterface.TAG_ORIENTATION);
+            if (tag != null)
+            {
+                int exifOrientation = tag.getValueAsInt(ExifInterface.Orientation.TOP_LEFT);
+
+                switch (exifOrientation)
+                {
+                    case ExifInterface.Orientation.TOP_RIGHT:
+                        flip = true;
+                    case ExifInterface.Orientation.TOP_LEFT:
+                        rotation = 0;
+                        break;
+//				case ExifInterface.Orientation.ORIENTATION_TRANSVERSE:
+//					flip = true;
+                    case ExifInterface.Orientation.RIGHT_TOP:
+                        rotation = 90;
+                        break;
+                    case ExifInterface.Orientation.BOTTOM_RIGHT:
+                        flip = true;
+                    case ExifInterface.Orientation.BOTTOM_LEFT:
+                        rotation = 180;
+                        break;
+//				case ExifInterface.Orientation.ORIENTATION_TRANSPOSE:
+//					flip = true;
+                    case ExifInterface.Orientation.RIGHT_BOTTOM:
+                        rotation = 270;
+                        break;
+                }
+            }
+        }
+        catch (IOException e)
+        {
+            L.w("Can't read EXIF tags from file [%s]", imageUri);
+        }
+
+        Log.d("com.nostra13.universalimageloader.core.decode", "rotation = " + rotation);
 		return new ExifInfo(rotation, flip);
 	}
 
@@ -172,7 +214,7 @@ public class BaseImageDecoder implements ImageDecoder {
 		try {
 			imageStream.reset();
 		} catch (IOException e) {
-			IoUtils.closeSilently(imageStream);
+            IoUtils.closeSilently(imageStream);
 			imageStream = getImageStream(decodingInfo);
 		}
 		return imageStream;
