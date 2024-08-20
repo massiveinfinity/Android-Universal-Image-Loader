@@ -18,6 +18,7 @@ package com.nostra13.universalimageloader.core.imageaware;
 import android.graphics.Bitmap;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import com.nostra13.universalimageloader.core.assist.ViewScaleType;
@@ -75,8 +76,12 @@ public class ImageViewAware extends ViewAware {
 		int width = super.getWidth();
 		if (width <= 0) {
 			ImageView imageView = (ImageView) viewRef.get();
-			if (imageView != null) {
-				width = getImageViewFieldValue(imageView, "mMaxWidth"); // Check maxWidth parameter
+			try {
+				if (imageView != null) {
+					width = getImageViewFieldValue(imageView, "mMaxWidth"); // Check maxWidth parameter
+				}
+			} catch (Exception e) {
+				Log.d("ERR", e.getMessage());
 			}
 		}
 		return width;
@@ -92,9 +97,14 @@ public class ImageViewAware extends ViewAware {
 		int height = super.getHeight();
 		if (height <= 0) {
 			ImageView imageView = (ImageView) viewRef.get();
-			if (imageView != null) {
-				height = getImageViewFieldValue(imageView, "mMaxHeight"); // Check maxHeight parameter
+			try {
+				if (imageView != null) {
+					height = getImageViewFieldValue(imageView, "mMaxHeight"); // Check maxHeight parameter
+				}
+			} catch (Exception e) {
+				Log.d("ERR", e.getMessage());
 			}
+
 		}
 		return height;
 	}
